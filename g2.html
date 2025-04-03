@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>汉字图片配对游戏</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation; /* 优化触摸响应 */
+        }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            text-align: center;
+            background-color: #f0f8ff;
+            padding: 10px;
+            margin: 0;
+            overflow-x: hidden;
+        }
+        h1 {
+            color: #2e8b57;
+            font-size: clamp(20px, 6vw, 28px); /* 响应式字体大小 */
+            margin: 10px 0;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column; /* 移动设备改为垂直布局 */
+            align-items: center;
+            margin: 10px auto;
+            width: 100%;
+            max-width: 800px;
+        }
+        .characters, .images {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .character, .image {
+            width: 20vw; /* 使用视口单位适应不同屏幕 */
+            height: 20vw;
+            max-width: 100px;
+            max-height: 100px;
+            min-width: 70px;
+            min-height: 70px;
+            margin: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: clamp(20px, 6vw, 28px); /* 响应式字体大小 */
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+            user-select: none; /* 防止文字被选中 */
+            -webkit-tap-highlight-color: transparent; /* 移除点击高亮 */
+        }
+        .character:hover, .image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .character.selected {
+            background-color: #ffeb3b;
+        }
+        .image.selected {
+            background-color: #81c784;
+        }
+        .matched {
+            opacity: 0.5;
+            cursor: default;
+        }
+        .score {
+            font-size: clamp(16px, 5vw, 20px);
+            margin: 10px;
+        }
+        .restart {
+            padding: 10px 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: clamp(14px, 4vw, 16px);
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .restart:hover {
+            background-color: #388e3c;
+        }
+
+        /* 平板和桌面布局 */
+        @media (min-width: 768px) {
+            .game-container {
+                flex-direction: row; /* 大屏幕恢复水平布局 */
+                justify-content: space-around;
+            }
+            .characters, .images {
+                width: 45%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>汉字图片配对游戏</h1>
+    <div class="score">配对成功: <span id="score">0</span>/10</div>
+    <div class="game-container">
+        <div class="characters" id="characters"></div>
+        <div class="images" id="images"></div>
+    </div>
+    <button class="restart" onclick="restartGame()">重新开始</button>
+
+    <script>
+        // 游戏数据
+        const pairs = [
+            { character: '山', image: '⛰️' },
+            { character: '水', image: '💧' },
+            { character: '日', image: '☀️' },
+            { character: '月', image: '🌙' },
+            { character: '云', image: '☁️' },
+            { character: '雨', image: '🌧️' },
+            { character: '田', image: '🌾' },
+            { character: '木', image: '🌲' },
+            { character: '土', image: '🏜️' },
+            { character: '草', image: '🌿' }
+        ];
+
+        let selectedCharacter = null;
+        let selectedImage = null;
+        let matchedPairs = 0;
+        let score = 0;
+
+        // 初始化游戏
+        function initGame() {
+            const charactersContainer = document.getElementById('characters');
+            const imagesContainer = document.getElementById('images');
+            
+            // 清空容器
+            charactersContainer.innerHTML = '';
+            imagesContainer.innerHTML = '';
+            
+            // 打乱顺序
+            const shuffledPairs = [...pairs].sort(() => Math.random() - 0.5);
+            const shuffledImages = [...pairs].sort(() => Math.random() - 0.5);
+            
+            // 创建汉字元素
+            shuffledPairs.forEach(pair => {
+                const div = document.createElement('div');
+                div.className = 'character';
+                div.textContent = pair.character;
+                div.dataset.char = pair.character;
+                div.addEventListener('click', selectCharacter);
+                div.addEventListener('touchstart', selectCharacter, { passive: true }); // 添加触摸事件
+                charactersContainer.appendChild(div);
+            });
+            
+            // 创建图片元素
+            shuffledImages.forEach(pair => {
+                const div = document.createElement('div');
+                div.className = 'image';
+                div.textContent = pair.image;
+                div.dataset.img = pair.image;
+                div.addEventListener('click', selectImage);
+                div.addEventListener('touchstart', selectImage, { passive: true }); // 添加触摸事件
+                imagesContainer.appendChild(div);
+            });
+            
+            // 重置分数
+            score = 0;
+            document.getElementById('score').textContent = score;
+        }
+
+        // 选择汉字
+        function selectCharacter(e) {
+            e.preventDefault(); // 防止触摸设备的默认行为
+            const target = e.target.closest('.character');
+            if (!target || target.classList.contains('matched')) return;
+            
+            // 清除之前的选择
+            document.querySelectorAll('.character.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            selectedCharacter = target.dataset.char;
+            target.classList.add('selected');
+            
+            checkMatch();
+        }
+
+        // 选择图片
+        function selectImage(e) {
+            e.preventDefault(); // 防止触摸设备的默认行为
+            const target = e.target.closest('.image');
+            if (!target || target.classList.contains('matched')) return;
+            
+            // 清除之前的选择
+            document.querySelectorAll('.image.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            selectedImage = target.dataset.img;
+            target.classList.add('selected');
+            
+            checkMatch();
+        }
+
+        // 检查是否匹配
+        function checkMatch() {
+            if (selectedCharacter && selectedImage) {
+                const matchedPair = pairs.find(p => 
+                    p.character === selectedCharacter && p.image === selectedImage);
+                
+                if (matchedPair) {
+                    // 匹配成功
+                    score++;
+                    document.getElementById('score').textContent = score;
+                    
+                    // 标记为已匹配
+                    document.querySelectorAll(`.character[data-char="${selectedCharacter}"]`).forEach(el => {
+                        el.classList.add('matched');
+                    });
+                    
+                    document.querySelectorAll(`.image[data-img="${selectedImage}"]`).forEach(el => {
+                        el.classList.add('matched');
+                    });
+                    
+                    // 检查游戏是否结束
+                    if (score === pairs.length) {
+                        setTimeout(() => {
+                            alert('恭喜你！全部配对成功！');
+                        }, 500);
+                    }
+                } else {
+                    // 匹配失败
+                    setTimeout(() => {
+                        document.querySelectorAll('.character.selected, .image.selected').forEach(el => {
+                            el.classList.remove('selected');
+                        });
+                    }, 500);
+                }
+                
+                // 重置选择
+                selectedCharacter = null;
+                selectedImage = null;
+            }
+        }
+
+        // 重新开始游戏
+        function restartGame() {
+            document.getElementById('characters').innerHTML = '';
+            document.getElementById('images').innerHTML = '';
+            initGame();
+        }
+
+        // 防止触摸设备上的双击缩放
+        document.addEventListener('dblclick', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        // 初始化游戏
+        window.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
